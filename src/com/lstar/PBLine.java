@@ -52,11 +52,11 @@ public class PBLine {
         if(tokens.length == 1){
             String callName = tokens[0].trim();
             if(callName.contains(" ")){
-                //TODO call contains space error
+                Erro.def(rowNumber + "Call cant contains space");
                 return;
             }
             if(PicoBlazeCompillator.calls.containsKey(callName)){
-                //TODO Erro.alreadyDefined(rowNumber, "Call Name");
+                Erro.alreadyDefined(rowNumber, "Call Name");
                 return;
             }
             PicoBlazeCompillator.calls.put(callName, 0);
@@ -66,11 +66,11 @@ public class PBLine {
         if(tokens.length == 2){
             String callName = tokens[0].trim();
             if(callName.contains(" ")){
-                //TODO call contains space error
+                Erro.def(rowNumber +"Call cant contains space");
                 return;
             }
             if(PicoBlazeCompillator.calls.containsKey(callName)){
-                //TODO Erro.alreadyDefined(rowNumber, "Call Name");
+                Erro.alreadyDefined(rowNumber, "Call Name");
                 return;
             }
             PicoBlazeCompillator.calls.put(callName, 0);
@@ -79,7 +79,7 @@ public class PBLine {
             normalizedBase = tokens[1].trim();
         }
         if (tokens.length > 2 ){
-            //TODO multiple calls in a row
+            Erro.def(rowNumber + "Multiple calls i a row");
             return;
         }
 
@@ -91,7 +91,7 @@ public class PBLine {
         String tokens[] = normalizedBase.split(" ");
         if(tokens[0].trim().toUpperCase().equals("NAMEREG")){
             if(tokens.length != 3){
-                //TODO Erro.noEnoughParameter(rowNumber,"Namereg");
+                Erro.noEnoughParameter(rowNumber,"Namereg");
                 return;
             }
             //Check for correct format
@@ -99,21 +99,21 @@ public class PBLine {
             String op2 = tokens[2].trim();
 
             if(!(op1.matches("S([0-9]|[A-F])"))){
-                //TODO incorrect format
+                Erro.numberNotFormatedcorrect(rowNumber, normalizedBase);
                 return;
             }
             if((op2.matches("([A-F]|[0-9]){2}") || op2.matches("S([0-9]|[A-F])"))){
-                //TODO incorrect format
+                Erro.numberNotFormatedcorrect(rowNumber, normalizedBase);
                 return;
             }
 
             if(PicoBlazeCompillator.constants.containsKey(op2)){
-                //TODO already defined as a constant
+                Erro.alreadyDefined(rowNumber, normalizedBase);
                 return;
             }
 
             if(PicoBlazeCompillator.nameregs.containsKey(op2)){
-                //TODO Erro.alreadyDefined(rowNumber, "Namereg");
+                Erro.alreadyDefined(rowNumber, "Namereg");
                 return;
             }else {
                 PicoBlazeCompillator.nameregs.put(op2,op1.toUpperCase());
@@ -128,7 +128,7 @@ public class PBLine {
         String tokens[] = normalizedBase.split(" ");
         if(tokens[0].trim().toUpperCase().equals("CONSTANT")){
             if(tokens.length != 3){
-                // TODO Erro.noEnoughParameter(rowNumber,"Constant");
+                Erro.noEnoughParameter(rowNumber,"Constant");
                 return;
             }
 
@@ -137,16 +137,16 @@ public class PBLine {
             String op2 = tokens[2].trim().toUpperCase();
 
             if(op1.matches("([A-F]|[0-9]){2}")){
-                //TODO incorrect format
+                Erro.numberNotFormatedcorrect(rowNumber, normalizedBase);
                 return;
             }
             if(!(op2.matches("([A-F]|[0-9]){2}"))){
-                //TODO incorrect format
+                Erro.numberNotFormatedcorrect(rowNumber, normalizedBase);
                 return;
             }
 
             if(PicoBlazeCompillator.constants.containsKey(op1)){
-                // TODO Erro.alreadyDefined(rowNumber, "Constant");
+                Erro.alreadyDefined(rowNumber, "Constant");
                 return;
             }else {
                 PicoBlazeCompillator.constants.put(op1,op2);

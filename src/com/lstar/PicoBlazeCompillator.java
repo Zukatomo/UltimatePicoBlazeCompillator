@@ -31,7 +31,6 @@ public class PicoBlazeCompillator {
             readFile(filename);
             assignComRowNum();
             genInstBits();
-            System.out.println(nameregs.toString());
 
         }
 
@@ -248,7 +247,7 @@ public class PicoBlazeCompillator {
                 if(calls.containsKey(elem.getCallName())){
                     calls.put(elem.getCallName(), compillableRowNumber);
                 }else{
-                    //TODO Erro.notDefined(elem.getRowNumber(), "call: " + elem.getCallName());
+                    Erro.notDefined(elem.getRowNumber(), "call: " + elem.getCallName());
                 }
             }
             if(elem.isRunnableLine()){
@@ -262,7 +261,7 @@ public class PicoBlazeCompillator {
         try {
             sc = new Scanner(new File(filename));
         }catch (Exception ex){
-            //TODO file exception
+            Erro.noFile();
             return;
         }
         while(sc.hasNextLine()){

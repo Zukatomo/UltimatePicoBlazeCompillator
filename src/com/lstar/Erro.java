@@ -34,6 +34,10 @@ public class Erro extends Exception{
             case 6: alreadyDefinedReg(row, message);break;
         }
     }
+
+    public static void def(String m){
+        System.out.println(ANSI_RED + "ERROR: " + ANSI_WHITE + m + ANSI_RESET);
+    }
     //0
     public static void noFile(){
         System.out.println(ANSI_RED + "ERROR: " + ANSI_WHITE +"No such file, or cant be read" + ANSI_RESET);

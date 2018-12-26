@@ -1,0 +1,32 @@
+CONSTANT	A	,	41
+CONSTANTa	Ax	,	41
+NAMEREG              s8,        na
+NAMEREG              s9,        nb
+LOAD S1,S1
+LOAD S1,
+LOAD S1,222
+LOAD S1, 05 05
+LOAD 05, 05
+LOADD S1,S2
+STORE S1, 111
+STO S1,S2
+cimke:
+SR1 S1
+SR1 SR1 SR alma
+SR1 SR1
+OUTPUT 55, S1
+OUTPUT 22,22
+JUMP cimke
+JUMP alma cimke
+JUMP C cimke
+LOAD SS,SA
+LOAD na, ba
+LOAD na, 05
+LOAD nb,02
+Return
+CALL NZ cimke
+LOAD S1, na
+LOAD na, A
+LOAD na, a
+SUB na, nb
+
