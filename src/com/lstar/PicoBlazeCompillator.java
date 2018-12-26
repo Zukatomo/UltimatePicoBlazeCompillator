@@ -1,6 +1,7 @@
 package com.lstar;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.*;
 
@@ -17,8 +18,13 @@ public class PicoBlazeCompillator {
 
     PicoBlazeCompillator(String filename){
         if(filename.equals("HARLEM")){
-            System.out.println("HARLEM");
-
+            try {
+                new HarlemShake();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }else {
 
             constants = new TreeMap<String, String>();
@@ -31,6 +37,8 @@ public class PicoBlazeCompillator {
             readFile(filename);
             assignComRowNum();
             genInstBits();
+            printToFile();
+            Messages.p("Done!");
 
         }
 
@@ -151,7 +159,7 @@ public class PicoBlazeCompillator {
         String las2 = "begin\n" +
                 "--\n" +
                 "  --Instantiate the Xilinx primitive for a block RAM\n" +
-                "  ram_1024_x_18: RAMB16_S18_S18\n" +
+                "  ram_1024_x_18: RAMB16_S18\n" +
                 "  --synthesis translate_off\n" +
                 "  --INIT values repeated to define contents for functional simulation";
         pw.println(las2);
