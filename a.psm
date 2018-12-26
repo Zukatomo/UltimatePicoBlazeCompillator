@@ -1,7 +1,838 @@
 ; ASCII TABLE
-CONSTANT	AA	,	41
-CONSTANT	BBC	,	42
-CONSTANT	C	,	431
+CONSTANT	A	,	41
+CONSTANT	B	,	42
+CONSTANT	C	,	43
 CONSTANT	D	,	44
 CONSTANT	E	,	45
 CONSTANT	F	,	46
+CONSTANT	G	,	47
+CONSTANT	H	,	48
+CONSTANT	I	,	49
+CONSTANT	J	,	4A
+CONSTANT	K	,	4B
+CONSTANT	L	,	4C
+CONSTANT	M	,	4D
+CONSTANT	N	,	4E
+CONSTANT	O	,	4F
+CONSTANT	P	,	50
+CONSTANT	Q	,	51
+CONSTANT	R	,	52
+CONSTANT	S	,	53
+CONSTANT	T	,	54
+CONSTANT	U	,	55
+CONSTANT	V	,	56
+CONSTANT	W	,	57
+CONSTANT	X	,	58
+CONSTANT	Y	,	59
+CONSTANT	Z	,	5A
+CONSTANT	a	,	61
+CONSTANT	b	,	62
+CONSTANT	c	,	63
+CONSTANT	d	,	64
+CONSTANT	e	,	65
+CONSTANT	f	,	66
+CONSTANT	g	,	67
+CONSTANT	h	,	68
+CONSTANT	i	,	69
+CONSTANT	j	,	6A
+CONSTANT	k	,	6B
+CONSTANT	l	,	6C
+CONSTANT	m	,	6D
+CONSTANT	n	,	6E
+CONSTANT	o	,	6F
+CONSTANT	p	,	70
+CONSTANT	q	,	71
+CONSTANT	r	,	72
+CONSTANT	s	,	73
+CONSTANT	t	,	74
+CONSTANT	u	,	75
+CONSTANT	v	,	76
+CONSTANT	w	,	77
+CONSTANT	x	,	78
+CONSTANT	y	,	79
+CONSTANT	z	,	7A
+CONSTANT	_0	,	30
+CONSTANT	_1	,	31
+CONSTANT	_2	,	32
+CONSTANT	_3	,	33
+CONSTANT	_4	,	34
+CONSTANT	_5	,	35
+CONSTANT	_6	,	36
+CONSTANT	_7	,	37
+CONSTANT	_8	,	38
+CONSTANT	_9	,	39
+CONSTANT	_pp	,	3A  ; KETTOSPONT :
+CONSTANT	_pv	,	3B  ; PONTOSVESSZO ;
+CONSTANT	_kis,	3C  ; kisebb <
+CONSTANT	_egy,	3D  ; egyenlosegjel =
+CONSTANT	_nagy,	3E  ; nagyobb >
+CONSTANT	_pl	,	2B  ; plussz jel +
+CONSTANT	_v	,	2C  ; vesszo ,
+CONSTANT	_mi	,	2D  ; minusz jel -
+CONSTANT	_p	,	2E  ; pont .
+CONSTANT	_per,	2F  ; per /
+CONSTANT	_kzny,	28  ; kerekzarojel-nyito (
+CONSTANT	_kzk,	29  ; kerekzarojel-zaro )
+CONSTANT	_szzny,	5B  ; szoglzarojel-nyito [
+CONSTANT	_szzz,	5D  ; szoglzarojel-zaro ]
+CONSTANT	__	,	5F  ; alulvonas _
+CONSTANT	_sp	,	20  ; szunetjel
+CONSTANT	_kuk,	40  ; kukac @
+CONSTANT	LF,   	0A  ; Line Feed
+CONSTANT	CR,    	0D  ; Carrige Return
+
+
+NAMEREG              s0,        membrpotL
+NAMEREG              s1 ,       membrpotH
+NAMEREG              s2 ,       membrpotLprev                  ; membrane potential value in the previous time-step
+NAMEREG              s3 ,       membrpotHprev
+NAMEREG              s4 ,       thresholdL                     ; membrane potetntial threshold value register (LowerByte)
+NAMEREG              s5 ,       thresholdH                     ; membrane potetntial threshold value register (HigherByte)
+NAMEREG              s6 ,       recovery
+NAMEREG              s7 ,       restingL                       ; membrane potetntial resting value register (LowerByte)
+NAMEREG              s8 ,       restingH                       ; membrane potetntial resting value register (HigherByte)
+NAMEREG              s9 ,       hyperp                         ; hyperpolarization value
+NAMEREG              sA,        leak                           ; leak current value
+NAMEREG              sB,        counter                        ; this is the register used as port number (synapse nr.) counter
+NAMEREG              sC,        timestep                       ; counter of the timestep number
+NAMEREG              sD,        hyperphase                     ; if == 0xFF , then the neuron is in hyperpolarization phase, 0x00 otherwise
+NAMEREG              sE ,       axon_value
+NAMEREG              sF ,       inp_val_reg                    ; temporary holder of the read input values
+
+;out port names
+CONSTANT             portmembrpotL, 70
+CONSTANT             portmembrpotH, 71
+CONSTANT             axon, 80
+CONSTANT             syncr_port, FE
+CONSTANT             timestep_port, FF
+
+;in port names
+;CONSTANT             other_somas_port, 90
+CONSTANT             hold_port, FD
+
+;other constants
+CONSTANT             nr_dendrites, 20	; number of input neurons, 32
+
+;-------------------Initializing register values
+                    LOAD      axon_value, 00
+                    OUTPUT    axon_value, axon
+
+                    LOAD      thresholdL, C6      ; Loading the threshold value of 1734, lower byte (C6h)
+                    LOAD      thresholdH, 06       ; Loading the threshold value of 1734, higher byte (06h)
+                    LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F            ; set leaking current value 15, (10h)
+                    LOAD      inp_val_reg, 01
+                    STORE     inp_val_reg, 00
+
+next_timeframe:     LOAD      timestep, 00
+                    LOAD      recovery, 00
+restart:            LOAD	  counter, 00
+
+	                OUTPUT    timestep, timestep_port
+
+                    OUTPUT    membrpotL, portmembrpotL; writing the actual MP value's Lower byte to the output port
+                    OUTPUT    membrpotH, portmembrpotH; writing the actual MP value's Higher byte to the output port
+
+
+                    CALL      Hold
+
+                    LOAD      inp_val_reg, 00
+                    OUTPUT    inp_val_reg, syncr_port       ; setting syncr=0
+
+
+
+;compute timestep
+                    ADD       timestep, 01        ; increment timestep counter
+                    COMPARE   timestep, 11
+                    JUMP      Z, next_timeframe
+
+                    COMPARE   hyperphase, FF     ; check to see if the neuron has just spiked and is in hyperpolarization phase or not
+                    JUMP      Z, active_hyperph
+
+                    LOAD      axon_value, 00
+                    OUTPUT    axon_value, axon    ; (re)setting axon to zero, in case the neuron just spiked
+read_inputs:
+	                LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+
+save_result:
+                    LOAD      membrpotLprev, membrpotL
+                    LOAD      membrpotHprev, membrpotH
+
+testing_thresh:
+                    COMPARE   thresholdH, membrpotH; has the membrane potential value reached the threshold value?
+                    JUMP      NC, leaking         ; jump to leak current if not
+                    LOAD      membrpotL, hyperp   ; reseting membr.pot. value
+                    LOAD      membrpotH, 00
+                    LOAD      axon_value, 01
+                    OUTPUT    axon_value, axon     ; axon=1, neuron is spiking
+                    LOAD      hyperphase, FF     ; setting the hyperpolariztion register to 0xFF
+                    LOAD      recovery, 0F        ; preparing recovery from hyperp. phase
+                    SUB       recovery, timestep
+                    JUMP      restart                ; start new timestep                                                                   OK2
+leaking:
+                    SUB       membrpotL, leak     ; leaking current from membr.pot.
+                    SUBCY     membrpotH, 00        ; leaking current from membr.pot.
+                    COMPARE   membrpotH, 00
+                    JUMP      NZ, leakdone
+
+;                    JUMP      C, decr_mpH_Byte     ; if lower byte was smaller then leak value, jump to decrease the higher byte by 1
+                    COMPARE   restingL, membrpotL   ; see if the leaking has reached the resting value
+                    JUMP      C, leakdone          ; if yes, then jump to exit cycle
+                    LOAD      membrpotL, restingL  ; else loading the membr.pot. with the resting value
+                    ;JUMP      leakdone
+
+leakdone:           LOAD      inp_val_reg, 01
+                    OUTPUT    inp_val_reg, syncr_port       ; setting sync=1
+                    JUMP      restart            ; start new timestep                                                                       OK1B
+active_hyperph:
+
+                    COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart             ; start new timestep                                                                      OK3
+
+hyperp_end:         LOAD      hyperphase, 00
+                    LOAD      inp_val_reg, 01
+                    OUTPUT    inp_val_reg, syncr_port       ; setting sync=1
+                    JUMP      restart            ; start new timestep                                                                       OK4
+
+
+;=========================================  R O U T I N E s  ================================
+;------------- Hold routine                   ; waiting for Master to launch timestep computation
+Hold:               SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, hold_port
+                    ;COMPARE   inp_val_reg, 01
+                    ;JUMP      Z, Hold
+                    TEST      inp_val_reg, 01
+                    JUMP      NC, Hold
+                    RETURN
+
+;---------------DELAY routines--------------------
+del_n_msec:    ; delay  msec10x_n x 10 miliseconds
+                CALL    del_10ms
+                SUB     membrpotL, 01
+                JUMP    NZ, del_n_msec
+                RETURN
+
+
+del_10ms:       LOAD    timestep, 32
+del_10mslp:
+                CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+
+del_200us:      LOAD    timestep, C8
+del_200uslp:
+                CALL    del_1us
+                SUB     timestep, 01
+                JUMP    NZ, del_200uslp
+                RETURN
+
+del_1us:        LOAD      timestep, 0B
+del_1uslp:      SUB       timestep, 01
+                JUMP      NZ, del_1uslp
+                RETURN
+
+del_220ns:      LOAD      timestep, 03
+                SUB       timestep, 01
+                SUB       timestep, 01
+                SUB       timestep, 01
+                RETURN
+
+;--------------------- UTILITY
+
+
+B2AdigitL:		; B2Adigit: convert binary to asc (hex) single digit, Lower Nibble
+                    AND      timestep, 0F
+          	        ADD      timestep, 30
+		            COMPARE  timestep, 3A
+		            RETURN   C
+		            ADD	     timestep, 07
+		            RETURN
+
+
+B2AdigitH:		; B2Adigit: convert binary to asc (hex) single digit, Higher Nibble
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+LOAD      thresholdL, C6      ; Loading the threshold value of 1734, lower byte (C6h)
+                    LOAD      thresholdH, 06       ; Loading the threshold value of 1734, higher byte (06h)
+                    LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F            ; set leaking current value 15, (10h)
+                    LOAD      inp_val_reg, 01
+                    STORE     inp_val_reg, 00
+LOAD      thresholdL, C6      ; Loading the threshold value of 1734, lower byte (C6h)
+                    LOAD      thresholdH, 06       ; Loading the threshold value of 1734, higher byte (06h)
+                    LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F            ; set leaking current value 15, (10h)
+                    LOAD      inp_val_reg, 01
+                    STORE     inp_val_reg, 00
+pi1:
+LOAD      thresholdH, 06       ; Loading the threshold value of 1734, higher byte (06h)
+                    LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F
+					CALL pi2
+					pi3:
+LOAD      thresholdH, 06       ; Loading the threshold value of 1734, higher byte (06h)
+                    LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F
+					CALL pi1
+					pi2:
+LOAD      thresholdH, 06       ; Loading the threshold value of 1734, higher byte (06h)
+                    LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F
+					CALL pi3
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+					LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F
+					CALL pi3
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+					LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F
+					CALL pi3
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+					LOAD      restingL,  98       ; Loading resting potential value = 408, lower byte (98h)
+                    LOAD      restingH, 01         ; Loading resting potetioal value = 408, higher byte (01h)
+                    LOAD      hyperp, CC         ; Loading hyperpolarization phase membrane potential value 204 (CCh)
+                    LOAD      membrpotL, restingL ; Initializing the membr. pot. with the resting value
+                    LOAD      membrpotH, restingH ; Initializing the membr. pot. with the resting value
+                    LOAD      leak, 0F
+					CALL pi3
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+                SUB     membrpotL, 01
+                JUMP    NZ, del_n_msec
+                RETURN
+
+                SUB     membrpotL, 01
+                JUMP    NZ, del_n_msec
+                RETURN
+
+                SUB     membrpotL, 01
+                JUMP    NZ, del_n_msec
+                RETURN
+
+                SUB     membrpotL, 01
+                JUMP    NZ, del_n_msec
+                RETURN
+
+                SUB     membrpotL, 01
+                JUMP    NZ, del_n_msec
+                RETURN
+				SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+					SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+					SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    SR0     timestep
+                    ADD	    timestep, 30
+		            COMPARE timestep, 3A
+		            RETURN	C
+		            ADD	   timestep, 07
+		            RETURN
+					CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+				CALL    del_200us
+                SUB     timestep, 01
+                JUMP    NZ, del_10mslp
+                RETURN
+		           COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					COMPARE   recovery, 00
+                    JUMP      Z, hyperp_end
+                    SUB       recovery, 01
+                    ADD       membrpotL, 05       ; adding the hyperpolarization phase value
+                    ADDCY     membrpotH, 00
+                    JUMP      restart
+					LOAD      inp_val_reg, 00
+	                SL1       inp_val_reg                   ; clearing flags
+                    INPUT     inp_val_reg, (counter)         ; reading Port(counter)
+                    ADD       membrpotL, inp_val_reg       ; adding the new value to the previuous sum
+                    ADDCY     membrpotH, 00
+                    ADD       counter, 01          ; increasing the counter
+                    COMPARE   counter, nr_dendrites         ; checking if the counter has reached the maximum value 20h=32dec
+                    JUMP      C, read_inputs      ; if not, jumping back to perform the next port reading
+
